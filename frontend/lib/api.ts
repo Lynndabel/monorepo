@@ -1,6 +1,7 @@
 import type { BackendErrorResponse } from './errors'
+import { enqueueOfflineRequest } from './offline-queue'
 
-const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 export const ACCOUNT_FROZEN_MESSAGE =
   "Account frozen due to negative balance. Please top up to continue.";
@@ -49,12 +50,12 @@ function parseErrorPayload(payload: unknown): {
   };
 
   const code = typeof typedError.code === "string" ? typedError.code : undefined;
-  const baseMessage =
-    code === "ACCOUNT_FROZEN"
-      ? ACCOUNT_FROZEN_MESSAGE
-      : typeof typedError.message === "string"
-        ? typedError.message
-        : "";
+  let baseMessage = "";
+  if (code === "ACCOUNT_FROZEN") {
+    baseMessage = ACCOUNT_FROZEN_MESSAGE;
+  } else if (typeof typedError.message === "string") {
+    baseMessage = typedError.message;
+  }
 
   const details =
     typedError.details && typeof typedError.details === "object"
@@ -64,27 +65,80 @@ function parseErrorPayload(payload: unknown): {
   return { message: baseMessage, code, details };
 }
 
+function isBrowser(): boolean {
+  return globalThis.window !== undefined
+}
+
+function getAuthToken(): string | null {
+  return isBrowser() ? localStorage.getItem("shelterflex_token") : null
+}
+
+function isStateMutatingMethod(method: string): boolean {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+}
+
+async function attachCsrfHeaderIfNeeded(headers: Headers, method: string): Promise<void> {
+  if (!isBrowser() || !isStateMutatingMethod(method)) {
+    return
+  }
+
+  const { csrfProtection } = await import("./csrf-protection")
+  const csrfToken = csrfProtection.getCurrentToken() ?? csrfProtection.initialize()
+  headers.set("X-CSRF-Token", csrfToken)
+}
+
+function shouldQueueOfflineRequest(method: string): boolean {
+  return isBrowser() && !navigator.onLine && isStateMutatingMethod(method)
+}
+
+async function parseBackendErrorResponse(
+  res: Response
+): Promise<BackendErrorResponse | null> {
+  try {
+    const text = await res.text()
+    if (!text) {
+      return null
+    }
+    return JSON.parse(text) as BackendErrorResponse
+  } catch {
+    return null
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-
   if (!baseUrl) {
     throw new Error("Missing NEXT_PUBLIC_BACKEND_URL");
   }
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("sheltaflex_token")
-      : null;
+  const token = getAuthToken()
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options?.headers ?? {}),
-  };
+  const headers = new Headers(options?.headers);
+  headers.set("Content-Type", "application/json");
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const method = (options?.method ?? "GET").toUpperCase();
+  await attachCsrfHeaderIfNeeded(headers, method)
 
   try {
+    if (shouldQueueOfflineRequest(method)) {
+      enqueueOfflineRequest({
+        path,
+        method: method as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+        body: typeof options?.body === 'string' ? options.body : null,
+        headers: Object.fromEntries(headers.entries()),
+      })
+
+      return {
+        queued: true,
+        offline: true,
+      } as T
+    }
+
     const res = await fetch(`${baseUrl}${path}`, {
       cache: "no-store",
       headers,
@@ -92,19 +146,14 @@ export async function apiFetch<T>(
     });
 
     if (!res.ok) {
-      // Try to parse backend error response
-      let errorResponse: BackendErrorResponse | null = null
-      try {
-        const text = await res.text()
-        if (text) {
-          errorResponse = JSON.parse(text) as BackendErrorResponse
-        }
-      } catch {
-        // Not JSON, use text as message
-      }
-
-      const message = errorResponse?.error?.message || `API error: ${res.status}`
-      throw new ApiError(res.status, errorResponse, message)
+      const errorResponse = await parseBackendErrorResponse(res)
+      const { message, code, details } = parseErrorPayload(errorResponse)
+      throw new ApiError({
+        message: message || `API error: ${res.status}`,
+        status: res.status,
+        code,
+        details,
+      })
     }
 
     return res.json();
