@@ -1,14 +1,17 @@
 # Contributing to Shelterflex
 
-Thanks for contributing. This repo is intentionally split into **3 projects** (`frontend/`, `backend/`, `contracts/`) so you can contribute to one area without needing to touch the others.
+Thanks for contributing. Shelterflex is a **Rent Now, Pay Later (RNPL)** platform for rental markets — tenants pay a deposit upfront and repay the balance in installments, while landlords list properties directly. The platform relies on smart contracts for payments, escrow, staking, and a whistleblower rewards programme.
 
-If you’re looking for tasks to pick up, start with `docs/ISSUES_CATALOG.md`.
+This repo is intentionally split into **3 projects** (`frontend/`, `backend/`, `contracts/`) so you can contribute to one area without needing to touch the others.
+
+If you're looking for tasks to pick up, start with `docs/ISSUES_CATALOG.md`.
 
 ## Ways to contribute
 
 - Frontend: UI, UX, routing, components, state management, integration with backend and Soroban
 - Backend: API design, validation, auth, persistence, Soroban RPC integration, monitoring
 - Contracts: Soroban smart contracts, tests, deployment scripts, security hardening
+- Whistleblower programme: reward allocation logic, earnings dashboard, reporting flows
 
 ## Ground rules
 
@@ -91,6 +94,16 @@ npm run build
 ```
 
 If your PR changes UI, include **screenshots** (or a short screen recording) in the PR description.
+
+#### UI/Image change verification
+
+For PRs that modify UI components or add/change images:
+
+- Include before/after screenshots showing the changes
+- For new features, provide screenshots of different states (loading, error, success)
+- For responsive changes, include screenshots at different breakpoints (mobile, tablet, desktop)
+- Verify images are optimized and not excessively large (use tools like ImageOptim, TinyPNG, or Next.js Image component)
+- Confirm accessibility: check color contrast, alt text for images, keyboard navigation
 
 ### Backend checks
 
@@ -213,19 +226,25 @@ Copy/paste PR description example (passes validation):
 
 ```md
 ## Summary
+
 What does this PR do and why?
 
 ## Linked issue
+
 Closes #123
 
 ## Changes
+
 - Change 1
 - Change 2
 
 ## Checklist
+
 - [ ] I tested locally
 - [ ] I did not commit secrets
 - [ ] I updated docs if needed
+- [ ] If UI changes: I included before/after screenshots
+- [ ] If images added/changed: I verified they are optimized and accessible
 ```
 
 ### 0) Fork the repo (recommended for public contributions)

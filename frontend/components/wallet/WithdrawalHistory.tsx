@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { RefreshCw, AlertCircle, ExternalLink, Wallet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ interface WithdrawalHistoryProps {
   className?: string;
 }
 
-export function WithdrawalHistory({ className }: WithdrawalHistoryProps) {
+export function WithdrawalHistory({ className }: Readonly<WithdrawalHistoryProps>) {
   const [withdrawalState, setWithdrawalState] = useState<LoadState<WithdrawalResponse[]>>({
     type: "loading",
   });
@@ -66,10 +66,11 @@ export function WithdrawalHistory({ className }: WithdrawalHistoryProps) {
     }
   }, []);
 
-  // Initial fetch
-  useState(() => {
+  // Initial fetch using useEffect (not useState initializer)
+  useEffect(() => {
     fetchWithdrawalHistory();
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className={className}>
